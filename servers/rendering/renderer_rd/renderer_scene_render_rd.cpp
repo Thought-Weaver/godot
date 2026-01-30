@@ -1252,6 +1252,13 @@ void RendererSceneRenderRD::material_set_use_debanding(bool p_enable) {
 	_update_shader_quality_settings();
 }
 
+void RendererSceneRenderRD::base_material_3d_set_default_filter(RenderingServer::MaterialFilter p_filter) {
+	if (base_material_3d_default_filter == p_filter) {
+		return;
+	}
+	base_material_3d_default_filter = p_filter;
+}
+
 int RendererSceneRenderRD::get_roughness_layers() const {
 	return sky.roughness_layers;
 }
@@ -1721,6 +1728,7 @@ void RendererSceneRenderRD::init() {
 
 	decals_set_filter(RS::DecalFilter(int(GLOBAL_GET("rendering/textures/decals/filter"))));
 	light_projectors_set_filter(RS::LightProjectorFilter(int(GLOBAL_GET("rendering/textures/light_projectors/filter"))));
+	base_material_3d_set_default_filter(RS::MaterialFilter(int(GLOBAL_GET("rendering/textures/default_filters/base_material_3d_filter"))));
 	lightmaps_set_bicubic_filter(GLOBAL_GET("rendering/lightmapping/lightmap_gi/use_bicubic_filter"));
 	material_set_use_debanding(GLOBAL_GET("rendering/anti_aliasing/quality/use_debanding"));
 
