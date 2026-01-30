@@ -957,6 +957,7 @@ public:
 
 	void decals_set_filter(RS::DecalFilter p_filter) override;
 	void light_projectors_set_filter(RS::LightProjectorFilter p_filter) override;
+	void base_material_3d_set_default_filter(RS::MaterialFilter p_filter) override;
 	virtual void lightmaps_set_bicubic_filter(bool p_enable) override;
 	virtual void material_set_use_debanding(bool p_enable) override;
 
