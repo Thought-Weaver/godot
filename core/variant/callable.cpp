@@ -234,6 +234,32 @@ int Callable::get_unbound_arguments_count() const {
 	}
 }
 
+bool Callable::get_return_type(PropertyInfo *r_property_info) const {
+	if (is_null()) {
+		return false;
+	}
+
+	if (is_custom()) {
+		return custom->get_return_type(r_property_info);
+	}
+
+	Object *obj = get_object();
+	if (obj == nullptr) {
+		return false;
+	}
+
+	MethodInfo mi;
+	if (!obj->get_method_info(method, &mi)) {
+		return false;
+	}
+
+	if (r_property_info) {
+		*r_property_info = mi.return_val;
+	}
+
+	return true;
+}
+
 CallableCustom *Callable::get_custom() const {
 	ERR_FAIL_COND_V_MSG(!is_custom(), nullptr,
 			vformat("Can't get custom on non-CallableCustom \"%s\".", operator String()));
@@ -481,6 +507,10 @@ void CallableCustom::get_bound_arguments(Vector<Variant> &r_arguments) const {
 
 int CallableCustom::get_unbound_arguments_count() const {
 	return 0;
+}
+
+bool CallableCustom::get_return_type(PropertyInfo *r_property_info) const {
+	return false;
 }
 
 CallableCustom::CallableCustom() {

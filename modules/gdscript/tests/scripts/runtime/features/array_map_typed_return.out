@@ -1,0 +1,6 @@
+GDTEST_OK
+[false, true, false]
+[false, true, false]
+["1", "false", "lighthouse"]
+["1", "false", "lighthouse"]
+[{ "some_string": "wizard", "some_int": 2 }, { "some_string": "sorcerer", "some_int": -1 }]

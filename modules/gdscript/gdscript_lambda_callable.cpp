@@ -160,6 +160,17 @@ GDScriptLambdaCallable::GDScriptLambdaCallable(Ref<GDScript> p_script, GDScriptF
 	h = (uint32_t)hash_murmur3_one_64((uint64_t)this);
 }
 
+bool GDScriptLambdaCallable::get_return_type(PropertyInfo *r_property_info) const {
+	// TODO: @loganapple Use is_valid declared above?
+	if (function == nullptr) {
+		return false;
+	}
+	if (r_property_info) {
+		*r_property_info = function->get_method_info().return_val;
+	}
+	return true;
+}
+
 bool GDScriptLambdaSelfCallable::compare_equal(const CallableCustom *p_a, const CallableCustom *p_b) {
 	// Lambda callables are only compared by reference.
 	return p_a == p_b;
@@ -301,4 +312,14 @@ GDScriptLambdaSelfCallable::GDScriptLambdaSelfCallable(Object *p_self, GDScriptF
 	captures = p_captures;
 
 	h = (uint32_t)hash_murmur3_one_64((uint64_t)this);
+}
+
+bool GDScriptLambdaSelfCallable::get_return_type(PropertyInfo *r_property_info) const {
+	if (function == nullptr) {
+		return false;
+	}
+	if (r_property_info) {
+		*r_property_info = function->get_method_info().return_val;
+	}
+	return true;
 }

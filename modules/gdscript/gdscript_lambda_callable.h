@@ -60,6 +60,7 @@ public:
 	StringName get_method() const override;
 	int get_argument_count(bool &r_is_valid) const override;
 	void call(const Variant **p_arguments, int p_argcount, Variant &r_return_value, Callable::CallError &r_call_error) const override;
+	bool get_return_type(PropertyInfo *r_property_info) const override;
 
 	GDScriptLambdaCallable(GDScriptLambdaCallable &) = delete;
 	GDScriptLambdaCallable(const GDScriptLambdaCallable &) = delete;
@@ -89,6 +90,7 @@ public:
 	StringName get_method() const override;
 	int get_argument_count(bool &r_is_valid) const override;
 	void call(const Variant **p_arguments, int p_argcount, Variant &r_return_value, Callable::CallError &r_call_error) const override;
+	bool get_return_type(PropertyInfo *r_property_info) const override;
 
 	GDScriptLambdaSelfCallable(GDScriptLambdaSelfCallable &) = delete;
 	GDScriptLambdaSelfCallable(const GDScriptLambdaSelfCallable &) = delete;

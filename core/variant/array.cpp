@@ -632,18 +632,41 @@ Array Array::filter(const Callable &p_callable) const {
 
 Array Array::map(const Callable &p_callable) const {
 	Array new_arr;
+
+	PropertyInfo return_info;
+	if (p_callable.get_return_type(&return_info)) {
+		// This should only happen when a callable doesn't have a return type specified or is specifically
+		// Variant. I figured the safest option was to not type the result in those cases.
+		const bool is_variant_return = (return_info.usage & PROPERTY_USAGE_NIL_IS_VARIANT) != 0;
+		// Per a comment in core/io, the class_name should be non-empty for built-in object types.
+		const bool object_class_known = return_info.type != Variant::OBJECT || return_info.class_name != StringName();
+		if (!is_variant_return && return_info.type != Variant::NIL && object_class_known) {
+			new_arr.set_typed(return_info.type, return_info.class_name, Variant());
+		}
+	}
+
+	// Note: Resizing only works *after* setting the type
 	new_arr.resize(size());
 
 	const Variant *argptrs[1];
 	Variant *write = new_arr._p->array.ptrw();
+	const bool is_typed = new_arr.is_typed();
 	for (int i = 0; i < size(); i++) {
 		argptrs[0] = &get(i);
 
+		Variant result;
 		Callable::CallError ce;
-		p_callable.callp(argptrs, 1, write[i], ce);
+		p_callable.callp(argptrs, 1, result, ce);
 		if (ce.error != Callable::CallError::CALL_OK) {
 			ERR_FAIL_V_MSG(Array(), vformat("Error calling method from 'map': %s.", Variant::get_callable_error_text(p_callable, argptrs, 1, ce)));
 		}
+
+		if (is_typed && !new_arr._p->typed.validate(result, "map")) {
+			// TODO: @loganapple Validate prints an error already, and I think this matches the structure for what to return
+			return Array();
+		}
+
+		write[i] = std::move(result);
 	}
 
 	return new_arr;

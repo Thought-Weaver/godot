@@ -37,6 +37,7 @@ class Array;
 class Object;
 class Variant;
 class CallableCustom;
+struct PropertyInfo;
 
 // This is an abstraction of things that can be called.
 // It is used for signals and other cases where efficient calling of functions
@@ -113,6 +114,7 @@ public:
 	void get_bound_arguments_ref(Vector<Variant> &r_arguments) const; // Internal engine use, the exposed one is below.
 	Array get_bound_arguments() const;
 	int get_unbound_arguments_count() const;
+	bool get_return_type(PropertyInfo *r_property_info) const; // Returns true and sets r_property_info to static return type of the Callable; false if can't be determined
 
 	uint32_t hash() const;
 
@@ -164,6 +166,7 @@ public:
 	virtual int get_bound_arguments_count() const;
 	virtual void get_bound_arguments(Vector<Variant> &r_arguments) const;
 	virtual int get_unbound_arguments_count() const;
+	virtual bool get_return_type(PropertyInfo *r_property_info) const;
 
 	CallableCustom();
 	virtual ~CallableCustom() {}

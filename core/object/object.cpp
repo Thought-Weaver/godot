@@ -727,6 +727,53 @@ int Object::get_method_argument_count(const StringName &p_method, bool *r_is_val
 	return 0;
 }
 
+bool Object::get_method_info(const StringName &p_method, MethodInfo *r_method_info) const {
+	// Following some of the styling patterns above, but the core concept is this: We check
+	// whether or not a script is attached, then it traverses to find the class that isn't
+	// subclassed (are there inheritance issues I should watch out for?), and tries to get
+	// the method info.
+
+	if (script_instance) {
+		Ref<Script> scr = script_instance->get_script();
+		while (scr.is_valid()) {
+			MethodInfo mi = scr->get_method_info(p_method);
+			// TODO: @loganapple I saw this being done in the editor code, but
+			// not sure this is the right option here.
+			if (!mi.name.is_empty()) {
+				if (r_method_info) {
+					*r_method_info = mi;
+				}
+				return true;
+			}
+		}
+		scr = scr->get_base_script();
+	}
+
+	{
+		MethodInfo mi;
+		if (ClassDB::get_method_info(get_class_name(), p_method, &mi)) {
+			if (r_method_info) {
+				*r_method_info = mi;
+			}
+			return true;
+		}
+	}
+
+	const Script *scr = Object::cast_to<Script>(this);
+	while (scr != nullptr) {
+		MethodInfo mi = scr->get_method_info(p_method);
+		if (!mi.name.is_empty()) {
+			if (r_method_info) {
+				*r_method_info = mi;
+			}
+			return true;
+		}
+		scr = scr->get_base_script().ptr();
+	}
+
+	return false;
+}
+
 Variant Object::getvar(const Variant &p_key, bool *r_valid) const {
 	if (r_valid) {
 		*r_valid = false;

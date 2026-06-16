@@ -698,6 +698,7 @@ public:
 
 	bool has_method(const StringName &p_method) const;
 	int get_method_argument_count(const StringName &p_method, bool *r_is_valid = nullptr) const;
+	bool get_method_info(const StringName &p_method, MethodInfo *r_method_info) const;
 	void get_method_list(List<MethodInfo> *p_list) const;
 	Variant callv(const StringName &p_method, const Array &p_args);
 	virtual Variant callp(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error);
