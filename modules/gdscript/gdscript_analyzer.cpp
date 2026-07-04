@@ -1176,7 +1176,7 @@ void GDScriptAnalyzer::resolve_class_member(GDScriptParser::ClassNode *p_class, 
 								if (enum_value_type == Variant::NIL) {
 									enum_value_type = value_type;
 								} else if (enum_value_type != value_type) {
-									push_error("R(Enum members must be either all integers or all strings, not a mix of both.)", element.custom_value);
+									push_error(R"(Enum members must be either all integers or all strings, not a mix of both.)", element.custom_value);
 								}
 								element.value = element.custom_value->reduced_value;
 								element.resolved = true;
