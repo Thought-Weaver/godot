@@ -2883,15 +2883,19 @@ Error GDScriptCompiler::_prepare_compilation(GDScript *p_script, const GDScriptP
 
 						String enum_hint_string;
 						bool first = true;
-						for (const KeyValue<StringName, int64_t> &E : variable_type.enum_values) {
+						for (const KeyValue<StringName, Variant> &E : variable_type.enum_values) {
 							if (first) {
 								first = false;
 							} else {
 								enum_hint_string += ",";
 							}
-							enum_hint_string += E.key.string().capitalize().xml_escape();
-							enum_hint_string += ":";
-							enum_hint_string += String::num_int64(E.value).xml_escape();
+							if (variable_type.builtin_type == Variant::STRING) {
+								enum_hint_string += String(E.value).xml_escape();
+							} else {
+								enum_hint_string += E.key.string().capitalize().xml_escape();
+								enum_hint_string += ":";
+								enum_hint_string += String::num_int64(E.value).xml_escape();
+							}
 						}
 
 						prop_info.hint_string = enum_hint_string;
