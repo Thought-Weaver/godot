@@ -352,7 +352,7 @@ void ExtendGDScriptParser::parse_class_symbol(const GDScriptParser::ClassNode *p
 					if (j > 0) {
 						symbol.detail += ", ";
 					}
-					symbol.detail += String(m.m_enum->values[j].identifier->name) + " = " + itos(m.m_enum->values[j].value);
+					symbol.detail += String(m.m_enum->values[j].identifier->name) + " = " + m.m_enum->values[j].value.stringify();
 				}
 				symbol.detail += "}";
 

@@ -136,7 +136,7 @@ public:
 		ClassNode *class_type = nullptr;
 
 		MethodInfo method_info; // For callable/signals.
-		HashMap<StringName, int64_t> enum_values; // For enums.
+		HashMap<StringName, Variant> enum_values; // For enums.
 
 		_FORCE_INLINE_ bool is_set() const { return kind != RESOLVING && kind != UNRESOLVED; }
 		_FORCE_INLINE_ bool is_resolving() const { return kind == RESOLVING; }
@@ -542,7 +542,7 @@ public:
 			EnumNode *parent_enum = nullptr;
 			int index = -1;
 			bool resolved = false;
-			int64_t value = 0;
+			Variant value = 0;
 			int line = 0;
 			int start_column = 0;
 			int end_column = 0;

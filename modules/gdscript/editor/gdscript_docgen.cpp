@@ -151,7 +151,7 @@ void GDScriptDocGen::_doctype_from_gdtype(const GDType &p_gdtype, String &r_type
 				r_type = "Dictionary";
 				return;
 			}
-			r_type = "int";
+			r_type = Variant::get_type_name(p_gdtype.builtin_type);
 			r_enum = String(p_gdtype.native_type).replace("::", ".");
 			if (r_enum.begins_with("res://")) {
 				int dot_pos = r_enum.rfind_char('.');

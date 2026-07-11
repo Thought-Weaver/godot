@@ -134,9 +134,14 @@ String GDScriptWarning::get_message() const {
 		case INT_AS_ENUM_WITHOUT_MATCH:
 			CHECK_SYMBOLS(3);
 			return vformat(R"(Cannot %s %s as Enum "%s": no enum member has matching value.)", symbols[0], symbols[1], symbols[2]);
+		case STRING_AS_ENUM_WITHOUT_CAST:
+			return "String used when an enum value is expected. If this is intended, cast the integer to the enum type using the \"as\" keyword.";
+		case STRING_AS_ENUM_WITHOUT_MATCH:
+			CHECK_SYMBOLS(3);
+			return vformat(R"(Cannot %s %s as Enum "%s": no enum member has matching value.)", symbols[0], symbols[1], symbols[2]);
 		case ENUM_VARIABLE_WITHOUT_DEFAULT:
-			CHECK_SYMBOLS(1);
-			return vformat(R"(The variable "%s" has an enum type and does not set an explicit default value. The default will be set to "0".)", symbols[0]);
+			CHECK_SYMBOLS(2);
+			return vformat(R"(The variable "%s" has an enum type and does not set an explicit default value. The default will be set to "%s".)", symbols[0], symbols[1]);
 		case EMPTY_FILE:
 			return "Empty script file.";
 		case DEPRECATED_KEYWORD:
@@ -237,6 +242,8 @@ String GDScriptWarning::get_name_from_code(Code p_code) {
 		PNAME("NARROWING_CONVERSION"),
 		PNAME("INT_AS_ENUM_WITHOUT_CAST"),
 		PNAME("INT_AS_ENUM_WITHOUT_MATCH"),
+		PNAME("STRING_AS_ENUM_WITHOUT_CAST"),
+		PNAME("STRING_AS_ENUM_WITHOUT_MATCH"),
 		PNAME("ENUM_VARIABLE_WITHOUT_DEFAULT"),
 		PNAME("EMPTY_FILE"),
 		PNAME("DEPRECATED_KEYWORD"),

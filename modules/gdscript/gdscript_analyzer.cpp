@@ -132,11 +132,11 @@ static GDScriptParser::DataType make_script_meta_type(const Ref<Script> &p_scrip
 
 // In enum types, native_type is used to store the class (native or otherwise) that the enum belongs to.
 // This disambiguates between similarly named enums in base classes or outer classes
-static GDScriptParser::DataType make_enum_type(const StringName &p_enum_name, const String &p_base_name, const bool p_meta = false) {
+static GDScriptParser::DataType make_enum_type(const StringName &p_enum_name, const String &p_base_name, const bool p_meta = false, const Variant::Type p_value_type = Variant::INT) {
 	GDScriptParser::DataType type;
 	type.type_source = GDScriptParser::DataType::ANNOTATED_EXPLICIT;
 	type.kind = GDScriptParser::DataType::ENUM;
-	type.builtin_type = p_meta ? Variant::DICTIONARY : Variant::INT;
+	type.builtin_type = p_meta ? Variant::DICTIONARY : p_value_type;
 	type.enum_type = p_enum_name;
 	type.is_constant = true;
 	type.is_meta_type = p_meta;
@@ -152,8 +152,8 @@ static GDScriptParser::DataType make_enum_type(const StringName &p_enum_name, co
 	return type;
 }
 
-static GDScriptParser::DataType make_class_enum_type(const StringName &p_enum_name, GDScriptParser::ClassNode *p_class, const String &p_script_path, bool p_meta = true) {
-	GDScriptParser::DataType type = make_enum_type(p_enum_name, p_class->fqcn, p_meta);
+static GDScriptParser::DataType make_class_enum_type(const StringName &p_enum_name, GDScriptParser::ClassNode *p_class, const String &p_script_path, bool p_meta = true, Variant::Type p_value_type = Variant::INT) {
+	GDScriptParser::DataType type = make_enum_type(p_enum_name, p_class->fqcn, p_meta, p_value_type);
 
 	type.class_type = p_class;
 	type.script_path = p_script_path;
@@ -1158,6 +1158,8 @@ void GDScriptAnalyzer::resolve_class_member(GDScriptParser::ClassNode *p_class, 
 				const GDScriptParser::EnumNode *prev_enum = current_enum;
 				current_enum = member.m_enum;
 
+				// The type gets determined from first typed member since heterogenous enums aren't allowed
+				Variant::Type enum_value_type = Variant::NIL;
 				Dictionary dictionary;
 				for (int j = 0; j < member.m_enum->values.size(); j++) {
 					GDScriptParser::EnumNode::Value &element = member.m_enum->values.write[j];
@@ -1166,19 +1168,37 @@ void GDScriptAnalyzer::resolve_class_member(GDScriptParser::ClassNode *p_class, 
 						reduce_expression(element.custom_value);
 						if (!element.custom_value->is_constant) {
 							push_error(R"(Enum values must be constant.)", element.custom_value);
-						} else if (element.custom_value->reduced_value.get_type() != Variant::INT) {
-							push_error(R"(Enum values must be integers.)", element.custom_value);
+							element.value = 0;
 						} else {
-							element.value = element.custom_value->reduced_value;
-							element.resolved = true;
+							const Variant::Type value_type = element.custom_value->reduced_value.get_type();
+							if (value_type != Variant::INT && value_type != Variant::STRING) {
+								push_error(R"(Enum values must be integers or strings))", element.custom_value);
+								element.value = 0;
+							} else {
+								if (enum_value_type == Variant::NIL) {
+									enum_value_type = value_type;
+								} else if (enum_value_type != value_type) {
+									push_error(R"(Enum members must be either all integers or all strings, not a mix of both.)", element.custom_value);
+								}
+								element.value = element.custom_value->reduced_value;
+								element.resolved = true;
+							}
 						}
 					} else {
-						if (element.index > 0) {
-							element.value = element.parent_enum->values[element.index - 1].value + 1;
+						if (enum_value_type == Variant::STRING) {
+							push_error(R"(String enum members must be explicitly assigned a value)", element.identifier);
+							element.value = String();
+							element.resolved = true;
 						} else {
-							element.value = 0;
+							enum_value_type = Variant::INT;
+							if (element.index > 0) {
+								const int64_t prev_value = element.parent_enum->values[element.index - 1].value;
+								element.value = prev_value + 1;
+							} else {
+								element.value = 0;
+							}
+							element.resolved = true;
 						}
-						element.resolved = true;
 					}
 
 					enum_type.enum_values[element.identifier->name] = element.value;
@@ -1224,8 +1244,10 @@ void GDScriptAnalyzer::resolve_class_member(GDScriptParser::ClassNode *p_class, 
 
 					if (!member.enum_value.custom_value->is_constant) {
 						push_error(R"(Enum values must be constant.)", member.enum_value.custom_value);
+						member.enum_value.value = 0;
 					} else if (member.enum_value.custom_value->reduced_value.get_type() != Variant::INT) {
-						push_error(R"(Enum values must be integers.)", member.enum_value.custom_value);
+						push_error(R"(Unset enum values must be integers. Use a set enum to declare a string enum.)", member.enum_value.custom_value);
+						member.enum_value.value = 0;
 					} else {
 						member.enum_value.value = member.enum_value.custom_value->reduced_value;
 						member.enum_value.resolved = true;
@@ -1236,7 +1258,8 @@ void GDScriptAnalyzer::resolve_class_member(GDScriptParser::ClassNode *p_class, 
 					if (member.enum_value.index > 0) {
 						const GDScriptParser::EnumNode::Value &prev_value = member.enum_value.parent_enum->values[member.enum_value.index - 1];
 						resolve_class_member(p_class, prev_value.identifier->name, member.enum_value.identifier);
-						member.enum_value.value = prev_value.value + 1;
+						const int64_t prev_int = prev_value.value;
+						member.enum_value.value = prev_int + 1;
 					} else {
 						member.enum_value.value = 0;
 					}
@@ -2240,16 +2263,19 @@ void GDScriptAnalyzer::resolve_assignable(GDScriptParser::AssignableNode *p_assi
 			parser->push_warning(p_assignable, GDScriptWarning::UNTYPED_DECLARATION, declaration_type, p_assignable->identifier->name);
 		}
 	} else if (!is_parameter && specified_type.kind == GDScriptParser::DataType::ENUM && p_assignable->initializer == nullptr) {
-		// Warn about enum variables without default value. Unless the enum defines the "0" value, then it's fine.
-		bool has_zero_value = false;
-		for (const KeyValue<StringName, int64_t> &kv : specified_type.enum_values) {
-			if (kv.value == 0) {
-				has_zero_value = true;
+		// Warn about enum variables without default value. Unless the enum defines the "0" or "" value, then it's fine.
+		Variant default_value;
+		Callable::CallError call_error;
+		Variant::construct(specified_type.builtin_type, default_value, nullptr, 0, call_error);
+		bool has_default_value = false;
+		for (const KeyValue<StringName, Variant> &kv : specified_type.enum_values) {
+			if (kv.value == default_value) {
+				has_default_value = true;
 				break;
 			}
 		}
-		if (!has_zero_value) {
-			parser->push_warning(p_assignable, GDScriptWarning::ENUM_VARIABLE_WITHOUT_DEFAULT, p_assignable->identifier->name);
+		if (!has_default_value) {
+			parser->push_warning(p_assignable, GDScriptWarning::ENUM_VARIABLE_WITHOUT_DEFAULT, p_assignable->identifier->name, default_value.stringify());
 		}
 	}
 #endif // DEBUG_ENABLED
@@ -2749,16 +2775,14 @@ void GDScriptAnalyzer::reduce_array(GDScriptParser::ArrayNode *p_array) {
 	p_array->type_constraint = arr_type;
 }
 
-#ifdef DEBUG_ENABLED
-static bool enum_has_value(const GDScriptParser::DataType p_type, int64_t p_value) {
-	for (const KeyValue<StringName, int64_t> &E : p_type.enum_values) {
+static bool enum_has_value(const GDScriptParser::DataType p_type, const Variant &p_value) {
+	for (const KeyValue<StringName, Variant> &E : p_type.enum_values) {
 		if (E.value == p_value) {
 			return true;
 		}
 	}
 	return false;
 }
-#endif // DEBUG_ENABLED
 
 void GDScriptAnalyzer::update_const_expression_builtin_type(GDScriptParser::ExpressionNode *p_expression, const GDScriptParser::DataType &p_type, const char *p_usage, bool p_is_cast) {
 	if (p_expression->type_constraint == p_type) {
@@ -2769,7 +2793,7 @@ void GDScriptAnalyzer::update_const_expression_builtin_type(GDScriptParser::Expr
 	}
 
 	GDScriptParser::DataType expression_type = p_expression->type_constraint;
-	bool is_enum_cast = p_is_cast && p_type.kind == GDScriptParser::DataType::ENUM && p_type.is_meta_type == false && expression_type.builtin_type == Variant::INT;
+	bool is_enum_cast = p_is_cast && p_type.kind == GDScriptParser::DataType::ENUM && p_type.is_meta_type == false && expression_type.builtin_type == p_type.builtin_type;
 	if (!is_enum_cast && !is_type_compatible(p_type, expression_type, true, p_expression)) {
 		push_error(vformat(R"(Cannot %s a value of type "%s" as "%s".)", p_usage, expression_type.to_string(), p_type.to_string()), p_expression);
 		return;
@@ -2779,6 +2803,17 @@ void GDScriptAnalyzer::update_const_expression_builtin_type(GDScriptParser::Expr
 	if (expression_type.is_variant() && !is_enum_cast && !is_type_compatible(p_type, value_type, true, p_expression)) {
 		push_error(vformat(R"(Cannot %s a value of type "%s" as "%s".)", p_usage, value_type.to_string(), p_type.to_string()), p_expression);
 		return;
+	}
+
+	if (p_type.kind == GDScriptParser::DataType::ENUM && !p_type.is_meta_type && p_type.builtin_type == Variant::STRING && value_type.builtin_type == Variant::STRING && !p_type.enum_values.is_empty() && !enum_has_value(p_type, p_expression->reduced_value)) {
+		if (p_is_cast) {
+#ifdef DEBUG_ENABLED
+			parser->push_warning(p_expression, GDScriptWarning::STRING_AS_ENUM_WITHOUT_MATCH, p_usage, p_expression->reduced_value.stringify(), p_type.to_string());
+#endif // DEBUG_ENABLED
+		} else {
+			push_error(vformat(R"(Cannot %s the value "%s" because it is not a valid member of the string enum "%s".)", p_usage, p_expression->reduced_value.stringify(), p_type.to_string()), p_expression);
+			return;
+		}
 	}
 
 #ifdef DEBUG_ENABLED
@@ -3855,10 +3890,10 @@ void GDScriptAnalyzer::reduce_cast(GDScriptParser::CastNode *p_cast) {
 #endif // DEBUG_ENABLED
 		} else {
 			bool valid = false;
-			if (op_type.builtin_type == Variant::INT && cast_type.kind == GDScriptParser::DataType::ENUM) {
+			if (op_type.builtin_type == cast_type.builtin_type && cast_type.kind == GDScriptParser::DataType::ENUM) {
 				mark_node_unsafe(p_cast);
 				valid = true;
-			} else if (op_type.kind == GDScriptParser::DataType::ENUM && cast_type.builtin_type == Variant::INT) {
+			} else if (op_type.kind == GDScriptParser::DataType::ENUM && cast_type.builtin_type == op_type.builtin_type) {
 				valid = true;
 			} else if (op_type.kind == GDScriptParser::DataType::BUILTIN && cast_type.kind == GDScriptParser::DataType::BUILTIN) {
 				valid = Variant::can_convert(op_type.builtin_type, cast_type.builtin_type);
@@ -4426,7 +4461,8 @@ void GDScriptAnalyzer::reduce_identifier(GDScriptParser::IdentifierNode *p_ident
 			const GDScriptParser::EnumNode::Value &element = current_enum->values[i];
 			if (element.identifier->name == p_identifier->name) {
 				StringName enum_name = current_enum->identifier ? current_enum->identifier->name : UNNAMED_ENUM;
-				GDScriptParser::DataType type = make_class_enum_type(enum_name, parser->current_class, parser->script_path, false);
+				const Variant::Type value_type = (element.resolved && element.value.get_type() == Variant::STRING) ? Variant::STRING : Variant::INT;
+				GDScriptParser::DataType type = make_class_enum_type(enum_name, parser->current_class, parser->script_path, false, value_type);
 				if (element.parent_enum->identifier) {
 					type.enum_type = element.parent_enum->identifier->name;
 				}
@@ -5829,6 +5865,12 @@ GDScriptParser::DataType GDScriptAnalyzer::type_from_metatype(const GDScriptPars
 	result.is_pseudo_type = false;
 	if (p_meta_type.kind == GDScriptParser::DataType::ENUM) {
 		result.builtin_type = Variant::INT;
+		for (const KeyValue<StringName, Variant> &kv : p_meta_type.enum_values) {
+			if (kv.value.get_type() == Variant::STRING) {
+				result.builtin_type = Variant::STRING;
+				break;
+			}
+		}
 	} else {
 		result.is_constant = false;
 	}
@@ -5913,6 +5955,14 @@ GDScriptParser::DataType GDScriptAnalyzer::type_from_property(const PropertyInfo
 				}
 			}
 			// PROPERTY_USAGE_CLASS_IS_BITFIELD: BitField[T] isn't supported (yet?), use plain int.
+		} else if (p_property.type == Variant::STRING) {
+			if ((p_property.usage & PROPERTY_USAGE_CLASS_IS_ENUM) && p_property.class_name != StringName()) {
+				Vector<String> names = String(p_property.class_name).split(ENUM_SEPARATOR);
+				if (names.size() == 2) {
+					result = make_enum_type(names[1], names[0], false, Variant::STRING);
+					result.is_constant = false;
+				}
+			}
 		}
 	}
 	return result;
@@ -6308,19 +6358,11 @@ GDScriptParser::DataType GDScriptAnalyzer::get_operation_type(Variant::Operator 
 	Variant::Type a_type = p_a.builtin_type;
 	Variant::Type b_type = p_b.builtin_type;
 
-	if (p_a.kind == GDScriptParser::DataType::ENUM) {
-		if (p_a.is_meta_type) {
-			a_type = Variant::DICTIONARY;
-		} else {
-			a_type = Variant::INT;
-		}
+	if (p_a.kind == GDScriptParser::DataType::ENUM && p_a.is_meta_type) {
+		a_type = Variant::DICTIONARY;
 	}
-	if (p_b.kind == GDScriptParser::DataType::ENUM) {
-		if (p_b.is_meta_type) {
-			b_type = Variant::DICTIONARY;
-		} else {
-			b_type = Variant::INT;
-		}
+	if (p_b.kind == GDScriptParser::DataType::ENUM && p_b.is_meta_type) {
+		b_type = Variant::DICTIONARY;
 	}
 
 	GDScriptParser::DataType result;
@@ -6354,9 +6396,11 @@ GDScriptParser::DataType GDScriptAnalyzer::get_operation_type(Variant::Operator 
 bool GDScriptAnalyzer::is_type_compatible(const GDScriptParser::DataType &p_target, const GDScriptParser::DataType &p_source, bool p_allow_implicit_conversion, const GDScriptParser::Node *p_source_node) {
 #ifdef DEBUG_ENABLED
 	if (p_source_node) {
-		if (p_target.kind == GDScriptParser::DataType::ENUM) {
-			if (p_source.kind == GDScriptParser::DataType::BUILTIN && p_source.builtin_type == Variant::INT) {
+		if (p_target.kind == GDScriptParser::DataType::ENUM && !p_target.is_meta_type && p_source.kind == GDScriptParser::DataType::BUILTIN) {
+			if (p_target.builtin_type == Variant::INT && p_source.builtin_type == Variant::INT) {
 				parser->push_warning(p_source_node, GDScriptWarning::INT_AS_ENUM_WITHOUT_CAST);
+			} else if (p_target.builtin_type == Variant::STRING && p_source.builtin_type == Variant::STRING) {
+				parser->push_warning(p_source_node, GDScriptWarning::STRING_AS_ENUM_WITHOUT_CAST);
 			}
 		}
 	}
@@ -6400,7 +6444,7 @@ bool GDScriptAnalyzer::check_type_compatibility(const GDScriptParser::DataType &
 		if (!valid && p_allow_implicit_conversion) {
 			valid = Variant::can_convert_strict(p_source.builtin_type, p_target.builtin_type);
 		}
-		if (!valid && p_target.builtin_type == Variant::INT && p_source.kind == GDScriptParser::DataType::ENUM && !p_source.is_meta_type) {
+		if (!valid && p_source.kind == GDScriptParser::DataType::ENUM && !p_source.is_meta_type && p_target.builtin_type == p_source.builtin_type) {
 			// Enum value is also integer.
 			valid = true;
 		}
@@ -6423,7 +6467,7 @@ bool GDScriptAnalyzer::check_type_compatibility(const GDScriptParser::DataType &
 	}
 
 	if (p_target.kind == GDScriptParser::DataType::ENUM) {
-		if (p_source.kind == GDScriptParser::DataType::BUILTIN && p_source.builtin_type == Variant::INT) {
+		if (p_source.kind == GDScriptParser::DataType::BUILTIN && p_source.builtin_type == p_target.builtin_type) {
 			return true;
 		}
 		if (p_source.kind == GDScriptParser::DataType::ENUM) {

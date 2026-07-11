@@ -4856,20 +4856,25 @@ bool GDScriptParser::export_annotations(AnnotationNode *p_annotation, Node *p_ta
 				if (export_type.is_meta_type) {
 					variable->export_info.type = Variant::DICTIONARY;
 				} else {
-					variable->export_info.type = Variant::INT;
+					const bool is_string_enum = export_type.builtin_type == Variant::STRING;
+					variable->export_info.type = is_string_enum ? Variant::STRING : Variant::INT;
 					variable->export_info.hint = PROPERTY_HINT_ENUM;
 
 					String enum_hint_string;
 					bool first = true;
-					for (const KeyValue<StringName, int64_t> &E : export_type.enum_values) {
+					for (const KeyValue<StringName, Variant> &E : export_type.enum_values) {
 						if (first) {
 							first = false;
 						} else {
 							enum_hint_string += ",";
 						}
-						enum_hint_string += E.key.string().capitalize().xml_escape();
-						enum_hint_string += ":";
-						enum_hint_string += String::num_int64(E.value).xml_escape();
+						if (is_string_enum) {
+							enum_hint_string += String(E.value).xml_escape();
+						} else {
+							enum_hint_string += E.key.string().capitalize().xml_escape();
+							enum_hint_string += ":";
+							enum_hint_string += String::num_int64(E.value).xml_escape();
+						}
 					}
 
 					variable->export_info.hint_string = enum_hint_string;
@@ -4933,20 +4938,25 @@ bool GDScriptParser::export_annotations(AnnotationNode *p_annotation, Node *p_ta
 					if (export_type.is_meta_type) {
 						variable->export_info.type = Variant::DICTIONARY;
 					} else {
-						variable->export_info.type = Variant::INT;
+						const bool is_string_enum = export_type.builtin_type == Variant::STRING;
+						variable->export_info.type = is_string_enum ? Variant::STRING : Variant::INT;
 						variable->export_info.hint = PROPERTY_HINT_ENUM;
 
 						String enum_hint_string;
 						bool first = true;
-						for (const KeyValue<StringName, int64_t> &E : export_type.enum_values) {
+						for (const KeyValue<StringName, Variant> &E : export_type.enum_values) {
 							if (first) {
 								first = false;
 							} else {
 								enum_hint_string += ",";
 							}
-							enum_hint_string += E.key.string().capitalize().xml_escape();
-							enum_hint_string += ":";
-							enum_hint_string += String::num_int64(E.value).xml_escape();
+							if (is_string_enum) {
+								enum_hint_string += String(E.value).xml_escape();
+							} else {
+								enum_hint_string += E.key.string().capitalize().xml_escape();
+								enum_hint_string += ":";
+								enum_hint_string += String::num_int64(E.value).xml_escape();
+							}
 						}
 
 						variable->export_info.hint_string = enum_hint_string;
@@ -5508,7 +5518,7 @@ PropertyInfo GDScriptParser::DataType::to_property_info(const String &p_name) co
 			if (is_meta_type) {
 				result.type = Variant::DICTIONARY;
 			} else {
-				result.type = Variant::INT;
+				result.type = builtin_type;
 				result.usage |= PROPERTY_USAGE_CLASS_IS_ENUM;
 				result.class_name = String(native_type).replace("::", ".");
 			}
@@ -6044,7 +6054,7 @@ void GDScriptParser::TreePrinter::print_enum(EnumNode *p_enum) {
 		const EnumNode::Value &item = p_enum->values[i];
 		print_identifier(item.identifier);
 		push_text(" = ");
-		push_text(itos(item.value));
+		push_text(item.value.operator String());
 		push_line(" ,");
 	}
 	decrease_indent();
