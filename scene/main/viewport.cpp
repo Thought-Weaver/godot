@@ -3627,6 +3627,19 @@ void Viewport::_push_shortcut_input_internal(const Ref<InputEvent> &p_event) {
 }
 
 void Viewport::_push_unhandled_input_internal(const Ref<InputEvent> &p_event) {
+	// Tooltip Input.
+	if (gui.tooltip_popup && gui.tooltip_popup->is_visible() && !gui.tooltip_popup->is_queued_for_deletion() && (p_event->is_action_type() || Ref<InputEventShortcut>(p_event).is_valid()) && Ref<InputEventMouse>(p_event).is_null()) {
+		Viewport *tooltip = gui.tooltip_popup;
+		if (!tooltip->disable_input && !tooltip->disable_input_override && tooltip->_can_consume_input_events()) {
+			tooltip->local_input_handled = false;
+			tooltip->_push_unhandled_input_internal(p_event);
+			if (gui.tooltip_popup && gui.tooltip_popup->is_input_handled()) {
+				set_input_as_handled();
+				return;
+			}
+		}
+	}
+
 	// Shortcut Input.
 	_push_shortcut_input_internal(p_event);
 
