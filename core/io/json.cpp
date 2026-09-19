@@ -48,6 +48,36 @@ const char *JSON::tk_name[TK_MAX] = {
 	"EOF",
 };
 
+static bool _parse_json_integer(const char32_t *p_str, int p_len, int64_t &r_number) {
+	const bool negative = p_str[0] == '-';
+	const int first_digit = negative ? 1 : 0;
+	if (first_digit == p_len) {
+		return false;
+	}
+
+	const uint64_t limit = uint64_t(INT64_MAX) + (negative ? 1 : 0);
+	uint64_t number = 0;
+	for (int i = first_digit; i < p_len; i++) {
+		const char32_t c = p_str[i];
+		if (!is_digit(c)) {
+			return false;
+		}
+
+		const uint64_t digit = c - '0';
+		if (number > (limit - digit) / 10) {
+			return false;
+		}
+		number = number * 10 + digit;
+	}
+
+	if (negative) {
+		r_number = number == uint64_t(INT64_MAX) + 1 ? INT64_MIN : -int64_t(number);
+	} else {
+		r_number = int64_t(number);
+	}
+	return true;
+}
+
 void JSON::_add_indent(String &r_result, const String &p_indent, int p_size) {
 	for (int i = 0; i < p_size; i++) {
 		r_result += p_indent;
@@ -390,10 +420,18 @@ Error JSON::_get_token(const char32_t *p_str, int &index, int p_len, Token &r_to
 				if (p_str[index] == '-' || is_digit(p_str[index])) {
 					//a number
 					const char32_t *rptr;
-					double number = String::to_float(&p_str[index], &rptr);
-					index += (rptr - &p_str[index]);
+					const double number = String::to_float(&p_str[index], &rptr);
+					const int len = rptr - &p_str[index];
+					int64_t number_int;
+					const bool is_int = _parse_json_integer(&p_str[index], len, number_int);
+
+					index += len;
 					r_token.type = TK_NUMBER;
-					r_token.value = number;
+					if (is_int) {
+						r_token.value = number_int;
+					} else {
+						r_token.value = number;
+					}
 					return OK;
 
 				} else if (is_ascii_alphabet_char(p_str[index])) {

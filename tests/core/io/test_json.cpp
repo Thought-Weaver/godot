@@ -194,6 +194,9 @@ TEST_CASE("[JSON] Parsing single data types") {
 	CHECK_MESSAGE(
 			(int)(json.get_data()) == 123456,
 			"Parsing an integer number as JSON should return the expected value.");
+	CHECK_MESSAGE(
+			json.get_data().get_type() == Variant::INT,
+			"Parsing an integer number as JSON should return the correct type.");
 
 	json.parse("0.123456");
 	CHECK_MESSAGE(
@@ -202,6 +205,9 @@ TEST_CASE("[JSON] Parsing single data types") {
 	CHECK_MESSAGE(
 			double(json.get_data()) == doctest::Approx(0.123456),
 			"Parsing a floating-point number as JSON should return the expected value.");
+	CHECK_MESSAGE(
+			json.get_data().get_type() == Variant::FLOAT,
+			"Parsing a floating-point number as JSON should return the correct type.");
 
 	json.parse("\"hello\"");
 	CHECK_MESSAGE(
@@ -392,6 +398,8 @@ TEST_CASE("[JSON] Serialization") {
 
 	static IntTestCase int_tests[] = {
 		{ 0, "0" },
+		{ 76561198066824992, "76561198066824992" },
+		{ 76561198066825011, "76561198066825011" },
 		{ INT64_MAX, "9223372036854775807" },
 		{ INT64_MIN, "-9223372036854775808" },
 	};
@@ -423,7 +431,50 @@ TEST_CASE("[JSON] Serialization") {
 			CHECK_MESSAGE(
 					json_value == test.json,
 					vformat("Serializing `%d` to JSON should return the expected value.", test.number));
+
+			json.parse(test.json);
+			CHECK_MESSAGE(
+					(int64_t)(json.get_data()) == test.number,
+					vformat("Deserializing `%s` with JSON should return the expected value.", test.json));
+			CHECK_MESSAGE(
+					json.get_data().get_type() == Variant::INT,
+					vformat("Deserializing `%s` with JSON should return the expected type.", test.json));
+			CHECK_MESSAGE(
+					json.stringify(json.get_data()) == test.json,
+					vformat("Round-tripping `%s` with JSON should preserve the serialized value.", test.json));
 		}
+	}
+
+	SUBCASE("Parsing floating-point values") {
+		// No decimal point but still a double.
+		String json_value = "5e2";
+		json.parse(json_value);
+		CHECK_MESSAGE(
+				double(json.get_data()) == 5e2,
+				vformat("Parsing `%s` with JSON should return the expected value.", json_value));
+		CHECK_MESSAGE(
+				json.get_data().get_type() == Variant::FLOAT,
+				vformat("Parsing `%s` with JSON should return the expected type.", json_value));
+
+		// Too large to be an int.
+		json_value = "9223372036854775808";
+		json.parse(json_value);
+		CHECK_MESSAGE(
+				double(json.get_data()) == (double)INT64_MAX + 1.0,
+				vformat("Parsing `%s` with JSON should return the expected value.", json_value));
+		CHECK_MESSAGE(
+				json.get_data().get_type() == Variant::FLOAT,
+				vformat("Parsing `%s` with JSON should return the expected type.", json_value));
+
+		// Too small to be an int.
+		json_value = "-9223372036854775809";
+		json.parse(json_value);
+		CHECK_MESSAGE(
+				double(json.get_data()) == (double)INT64_MIN - 1.0,
+				vformat("Parsing `%s` with JSON should return the expected value.", json_value));
+		CHECK_MESSAGE(
+				json.get_data().get_type() == Variant::FLOAT,
+				vformat("Parsing `%s` with JSON should return the expected type.", json_value));
 	}
 }
 
